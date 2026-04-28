@@ -58,7 +58,24 @@ backend/sessions/
 backend/memory/
 ```
 
-### 3. 初始化 Git
+### 3. 配置 SSH（推荐）
+
+如使用 HTTPS 频繁失败，可配置 SSH 免密登录：
+
+```bash
+# 1. 检查SSH密钥
+ls -la ~/.ssh/id_ed25519.pub  # 或 id_rsa.pub
+
+# 2. 如无密钥，生成
+ssh-keygen -t ed25519 -C "your-email@example.com"
+
+# 3. 将公钥添加到 GitHub
+# 复制公钥内容
+cat ~/.ssh/id_ed25519.pub
+# 在 GitHub -> Settings -> SSH and GPG keys -> New SSH key 粘贴
+```
+
+### 4. 初始化 Git
 
 ```bash
 cd 项目目录
@@ -67,19 +84,23 @@ git add -A
 git commit -m "initial commit"
 ```
 
-### 4. 推送到 GitHub
+### 5. 推送到 GitHub
 
+**方式1：HTTPS**
 ```bash
-# 添加远程仓库
 git remote add origin https://github.com/用户名/仓库名.git
+git branch -M main
+git push -u origin main
+```
 
-# 推送
+**方式2：SSH**
+```bash
+git remote add origin git@github.com:用户名/仓库名.git
 git branch -M main
 git push -u origin main
 ```
 
 如需强制覆盖远程：
-
 ```bash
 git push origin main --force
 ```
@@ -89,3 +110,4 @@ git push origin main --force
 - 确保 `.env` 文件已添加到 `.gitignore`，避免泄露 API 密钥
 - 大型模型文件 (~GB) 应排除
 - 用户会话数据应排除以保护隐私
+- HTTPS 连接不稳定时建议使用 SSH
