@@ -11,6 +11,12 @@
 - 🔌 **平台集成** - 飞书 Webhook 集成
 - 🧠 **Skills 插件** - Markdown 编写的技能扩展
 
+## 环境要求
+
+- **Python**: 3.10+ (via conda)
+- **Node.js**: 18+
+- **API 密钥**: DeepSeek API Key
+
 ## 项目结构
 
 ```
@@ -28,7 +34,7 @@
 │       └── app/         # App Router
 ├── start.sh             # 启动脚本
 ├── stop.sh              # 停止脚本
-└── AGENTS.md            # Agent 配置说明
+└── README.md            # 说明文档
 ```
 
 ## 快速开始
@@ -36,51 +42,49 @@
 ### 1. 克隆项目
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/MITAvicii/-yuanling.git
 cd 源灵AI助手管家
 ```
 
-### 2. 配置环境变量
+### 2. 配置环境
+
+**创建 conda 环境：**
+
+```bash
+conda create -n yuanling python=3.11 -y
+conda activate yuanling
+```
+
+**安装后端依赖：**
+
+```bash
+pip install -r backend/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+**安装前端依赖：**
+
+```bash
+cd frontend
+npm install --registry=https://registry.npmmirror.com
+```
+
+**配置 API 密钥：**
 
 在 `backend/` 目录下创建 `.env` 文件：
 
-```bash
-cp backend/.env.example backend/.env
-```
-
-编辑 `backend/.env`，填入你的 API 密钥：
-
 ```env
 DEEPSEEK_API_KEY=your-api-key-here
-DASHSCOPE_API_KEY=your-aliyun-api-key  # 可选，用于Embedding
 ```
 
-### 3. 启动服务（推荐方式）
+### 3. 启动服务
 
 ```bash
 ./start.sh
 ```
 
-这将同时启动：
-- 后端服务: http://localhost:8002
-- 前端服务: http://localhost:3000
-
-### 4. 手动启动
-
-如需分别启动：
-
-**后端：**
-```bash
-conda activate yuanling
-cd 源灵AI助手管家
-uvicorn backend.app:app --host 0.0.0.0 --port 8002 --reload
-```
-
-**前端：**
-```bash
-cd frontend
-npm run dev
-```
+服务启动后：
+- 后端: http://localhost:8002
+- 前端: http://localhost:3000
 
 ## 使用说明
 
@@ -108,28 +112,16 @@ Agent 可以自动使用以下工具：
 |------|------|
 | 后端 | FastAPI, LangGraph, LangChain, LlamaIndex |
 | 前端 | Next.js 14, React, Tailwind CSS |
-| LLM | DeepSeek (默认) |
+| LLM | DeepSeek |
 | Embedding | BGE-base-zh-v1.5 |
 
 ## 注意事项
 
-- **模型文件**：本地 Embedding 模型 (~400MB) 已在 .gitignore 中排除，首次使用需自行下载
+- **模型文件**：本地 Embedding 模型 (~400MB) 在 .gitignore 中排除，首次使用需自行下载到 `backend/models/`
 - **会话数据**：`backend/sessions/` 包含用户会话，已排除以保护隐私
-- **API 密钥**：必须配置 `.env` 文件中的 API 密钥才能使用 LLM
+- **API 密钥**：必须配置 `.env` 文件中的 DEEPSEEK_API_KEY 才能使用 LLM
 
 ## 开发相关
-
-### 安装依赖
-
-```bash
-# 后端
-conda activate yuanling
-pip install -r backend/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 前端
-cd frontend
-npm install --registry=https://registry.npmmirror.com
-```
 
 ### 测试
 
