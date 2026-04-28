@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #1a1a2e;
+  --background: #f8f9fb;
+  --primary: #4f46e5;
+  --primary-light: #818cf8;
+  --secondary: #f97316;
+  --border: #e5e7eb;
+  --muted: #6b7280;
+  --card: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* 卡片样式 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* 按钮样式 */
+.btn-primary {
+  @apply bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium;
+  @apply hover:bg-indigo-700 active:scale-[0.98] transition-all;
+}
+
+.btn-ghost {
+  @apply text-gray-600 px-3 py-2 rounded-lg font-medium;
+  @apply hover:bg-gray-100 active:scale-[0.98] transition-all;
+}
+
+.btn-icon {
+  @apply p-2 rounded-lg text-gray-500;
+  @apply hover:bg-gray-100 hover:text-gray-700 transition-all;
+}
+
+/* 输入框 */
+.input {
+  @apply w-full px-4 py-3 bg-white border border-gray-200 rounded-xl;
+  @apply focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500;
+  @apply placeholder:text-gray-400 transition-all;
+}
+
+/* 消息气泡 */
+.message-user {
+  @apply bg-indigo-600 text-white rounded-2xl rounded-br-md px-4 py-2.5;
+  max-width: 75%;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);
+}
+
+.message-assistant {
+  @apply bg-white border border-gray-100 rounded-2xl rounded-bl-md px-4 py-2.5;
+  max-width: 75%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* 思考链 */
+.thinking-block {
+  @apply bg-amber-50 border border-amber-100 rounded-xl p-3 text-sm text-amber-800;
+}
+
+/* 侧边栏项目 */
+.sidebar-item {
+  @apply w-full text-left px-3 py-2.5 rounded-lg transition-all;
+  @apply hover:bg-gray-100 text-gray-700;
+}
+
+.sidebar-item.active {
+  @apply bg-indigo-50 text-indigo-700 font-medium;
+}
+
+/* 导航标签 - 图标模式 */
+.nav-tab {
+  @apply flex items-center justify-center p-2.5 rounded-lg font-medium transition-all;
+  @apply text-gray-500 hover:text-gray-700 hover:bg-gray-100;
+}
+.nav-tab.active {
+  @apply bg-indigo-600 text-white hover:bg-indigo-700;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.2s ease-out;
+}
+
+/* 标签徽章 */
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-green {
+  @apply bg-green-100 text-green-700;
+}
+
+.badge-orange {
+  @apply bg-orange-100 text-orange-700;
+}
+
+/* 分割线 */
+.divider {
+  @apply border-t border-gray-100 my-2;
+}
+
+/* 头部标签 */
+.header-label {
+  @apply text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2;
+}

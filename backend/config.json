@@ -1,0 +1,96 @@
+{
+  "chat_provider": "deepseek",
+  "chat_model": "deepseek-chat",
+  "temperature": 0.7,
+  "max_tokens": 4096,
+  "embedding_model": "bge-base-zh-v1.5",
+  "providers": {
+    "deepseek": {
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "models": [
+        "deepseek-chat",
+        "deepseek-reasoner"
+      ]
+    },
+    "dashscope": {
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "models": [
+        "qwen-turbo",
+        "qwen-plus",
+        "qwen-max",
+        "qwen3-vl-embedding"
+      ]
+    },
+    "nvidia": {
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "api_key_env": "NVIDIA_API_KEY",
+      "models": [
+        "meta/llama-3.1-8b-instruct",
+        "nvidia/llama-3.1-nemotron-70b-instruct"
+      ]
+    },
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "models": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo"
+      ]
+    }
+  },
+  "custom_models": {},
+  "provider_models": {
+    "nvidia": "z-ai/glm5",
+    "deepseek": "deepseek-chat"
+  },
+  "platform_apps": {
+    "feishu": {
+      "app_id": "cli_a91f7412c338dcc1",
+      "app_secret": "y0ABI9vHz1XBXCsHoph88cG0UHjr6OPk",
+      "encrypt_key": null,
+      "verification_token": null,
+      "enabled": true,
+      "open_id": "ou_039c48388eec00cd1b2c157966e5678d"
+    }
+  },
+  "rag_enabled": true,
+  "rag": {
+    "enabled": true,
+    "knowledge_dir": "knowledge",
+    "storage_dir": "storage",
+    "chunk_size": 512,
+    "chunk_overlap": 50,
+    "rerank_threshold": 0.0
+  },
+  "memory": {
+    "max_file_size": 20000,
+    "truncation_marker": "...[truncated]"
+  },
+  "tools": {
+    "terminal": {
+      "enabled": true,
+      "root_dir": ".",
+      "blacklist": [
+        "rm -rf /",
+        "mkfs",
+        "dd if=",
+        "> /dev/sd"
+      ]
+    },
+    "file_reader": {
+      "enabled": true,
+      "allowed_paths": [
+        "."
+      ]
+    }
+  },
+  "agent": {
+    "max_iterations": 15,
+    "recursion_limit": 100,
+    "request_timeout": 180,
+    "tool_result_max_length": 500
+  }
+}

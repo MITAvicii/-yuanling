@@ -1,0 +1,48 @@
+# Logs
+*.log
+*.log.*
+
+# Documents
+*.docx
+*.pdf
+
+# Environment
+.env
+.env.local
+.env.example
+backend/.env*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models (local embedding models - large files)
+backend/models/
+
+# Build outputs
+frontend/.next/
+frontend/out/
+
+# Node modules
+frontend/node_modules/
+
+# Sessions (user data)
+backend/sessions/
+
+# Memory (user data)
+backend/memory/
+
+# Knowledge base (optional)
+knowledge/
+memory/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

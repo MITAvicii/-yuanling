@@ -1,0 +1,70 @@
+# SearxNG settings.yml
+# See: https://docs.searxng.org/admin/settings/
+
+use_default_settings: true
+
+general:
+  instance_name: "ask-search"
+  debug: false
+  privacypolicy_url: false
+  contact_url: false
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  formats:
+    - html
+    - json
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "${SEARXNG_SECRET}"
+  base_url: "${SEARXNG_BASE_URL}"
+  limiter: false
+  image_proxy: false
+  method: "GET"
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  default_locale: ""
+  default_infinite_scroll: false
+
+enabled_plugins:
+  - 'Hash plugin'
+  - 'Self Information'
+  - 'Tracker URL remover'
+  - 'Ahmia blacklist'
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: brave
+    engine: brave
+    shortcut: bv
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+  useragent_suffix: ""
