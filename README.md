@@ -114,10 +114,11 @@ Agent 可以自动使用以下工具：
 | 前端 | Next.js 14, React, Tailwind CSS |
 | LLM | DeepSeek |
 | Embedding | BGE-base-zh-v1.5 |
+| Reranker | BGE-reranker-base |
 
 ## 注意事项
 
-- **模型文件**：本地 Embedding 模型 (~400MB) 在 .gitignore 中排除，首次使用需自行下载到 `backend/models/`
+- **模型文件**：本地 Embedding 模型 (~400MB) 和 Reranker 模型 (~400MB) 在 .gitignore 中排除，首次使用需自行下载到 `backend/models/`
 - **会话数据**：`backend/sessions/` 包含用户会话，已排除以保护隐私
 - **API 密钥**：必须配置 `.env` 文件中的 DEEPSEEK_API_KEY 才能使用 LLM
 
