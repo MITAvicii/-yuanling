@@ -25,6 +25,7 @@ class ProviderConfig(BaseModel):
     base_url: str
     api_key_env: str = ""
     models: List[str] = []
+    model_capabilities: Dict[str, List[str]] = {}
 
 
 class RAGConfig(BaseModel):
@@ -125,9 +126,15 @@ class Settings(BaseSettings):
     nvidia_api_key: Optional[str] = None
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     
+    agnes_ai_api_key: Optional[str] = None
+    agnes_ai_base_url: str = "https://apihub.agnes-ai.com/v1"
+    
+    custom_api_key: Optional[str] = None
+    
     class Config:
         env_file = str(BACKEND_DIR / ".env")
         env_file_encoding = "utf-8"
+        extra = "allow"  # 允许自定义提供商的额外环境变量（如 CUSTOM_API_KEY 等）
 
 
 class ConfigManager:
@@ -181,20 +188,26 @@ class ConfigManager:
             "dashscope": self._settings.dashscope_api_key,
             "openai": self._settings.openai_api_key,
             "nvidia": self._settings.nvidia_api_key,
+            "agnes-ai": self._settings.agnes_ai_api_key,
         }
         
         if provider in key_mapping:
             return key_mapping[provider]
         
         # 自定义提供商 - 从环境变量动态获取
-        env_key = f"{provider.upper()}_API_KEY"
+        # 将提供商 ID 中的连字符替换为下划线（env 变量名不支持连字符）
+        safe_name = provider.upper().replace('-', '_')
+        env_key = f"{safe_name}_API_KEY"
         return os.environ.get(env_key)
     
     def get_base_url(self, provider: str) -> str:
         """获取指定提供商的 Base URL"""
         # 优先从 config.json 的 providers 配置读取
         if provider in self._config.providers:
-            return self._config.providers[provider].base_url
+            provider_info = self._config.providers[provider]
+            if isinstance(provider_info, dict):
+                return provider_info.get("base_url", "")
+            return provider_info.base_url
         
         # 内置提供商
         url_mapping = {
@@ -202,13 +215,15 @@ class ConfigManager:
             "dashscope": self._settings.dashscope_base_url,
             "openai": self._settings.openai_base_url,
             "nvidia": self._settings.nvidia_base_url,
+            "agnes-ai": self._settings.agnes_ai_base_url,
         }
         
         if provider in url_mapping:
             return url_mapping[provider]
         
         # 从环境变量获取自定义提供商的 base_url
-        env_url = f"{provider.upper()}_BASE_URL"
+        safe_name = provider.upper().replace('-', '_')
+        env_url = f"{safe_name}_BASE_URL"
         return os.environ.get(env_url, "")
     
     def get_llm_config(self) -> dict[str, Any]:

@@ -10,14 +10,29 @@ interface SettingsPanelProps {
 }
 
 // 预设提供商模板
-const PROVIDER_TEMPLATES = [
+const PROVIDER_TEMPLATES: Array<{
+  id: string;
+  name: string;
+  baseUrl: string;
+  models: string[];
+  modelCapabilities?: Record<string, string[]>;
+}> = [
   { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com', models: ['deepseek-chat', 'deepseek-reasoner'] },
-  { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
+  { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'], modelCapabilities: { 'gpt-4o': ['chat', 'vision'], 'gpt-4-turbo': ['chat', 'vision'] } },
   { id: 'dashscope', name: '阿里云 DashScope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-turbo', 'qwen-plus', 'qwen-max'] },
   { id: 'nvidia', name: 'NVIDIA NIM', baseUrl: 'https://integrate.api.nvidia.com/v1', models: ['meta/llama-3.1-8b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'] },
   { id: 'ollama', name: 'Ollama (本地)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.1', 'qwen2.5', 'mistral'] },
+  { id: 'agnes-ai', name: 'Agnes AI (全模态)', baseUrl: 'https://apihub.agnes-ai.com/v1', models: ['agnes-2.0-flash', 'agnes-1.5-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0'], modelCapabilities: { 'agnes-2.0-flash': ['chat', 'vision'], 'agnes-1.5-flash': ['chat', 'vision'], 'agnes-image-2.0-flash': ['image_gen'], 'agnes-image-2.1-flash': ['image_gen'], 'agnes-video-v2.0': ['video_gen'] } },
   { id: 'custom', name: '自定义', baseUrl: '', models: [] },
 ];
+
+// 能力标签映射
+const CAPABILITY_LABELS: Record<string, string> = {
+  'chat': '💬 对话',
+  'vision': '👁 视觉理解',
+  'image_gen': '🎨 图片生成',
+  'video_gen': '🎬 视频生成',
+};
 
 const PLATFORMS = [
   { id: 'feishu', name: '飞书', icon: '📢' },
@@ -44,6 +59,9 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   // 保存每个提供商最后使用的模型
   const [providerModels, setProviderModels] = useState<Record<string, string>>({});
   
+  // 动态注册的提供商（不在预设模板中）
+  const [dynamicProviders, setDynamicProviders] = useState<Array<{id: string; name: string}>>([]);
+  
   // 平台应用
   const [platformApps, setPlatformApps] = useState<PlatformApp[]>([]);
   const [showAddPlatform, setShowAddPlatform] = useState(false);
@@ -66,7 +84,8 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       const data = await getConfig();
       
       // 加载对话模型配置
-      setChatProvider(data.chat_provider || 'deepseek');
+      const provider = data.chat_provider || 'deepseek';
+      setChatProvider(provider);
       setChatModel(data.chat_model || 'deepseek-chat');
       setChatTemperature(data.temperature || 0.7);
       
@@ -74,9 +93,18 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       if (data.provider_api_keys) {
         setAllApiKeys(data.provider_api_keys);
         // 设置当前提供商的 API Key
-        if (data.provider_api_keys[data.chat_provider]) {
-          setChatApiKey(data.provider_api_keys[data.chat_provider]);
+        if (data.provider_api_keys[provider]) {
+          setChatApiKey(data.provider_api_keys[provider]);
+        } else {
+          setChatApiKey('');
         }
+        
+        // 收集不在预设模板中的提供商
+        const presetIds = PROVIDER_TEMPLATES.map(t => t.id);
+        const dynamic = Object.keys(data.provider_api_keys)
+          .filter(id => !presetIds.includes(id) && id !== provider)
+          .map(id => ({ id, name: id }));
+        setDynamicProviders(dynamic);
       }
       
       // 加载每个提供商最后使用的模型
@@ -84,10 +112,21 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         setProviderModels(data.provider_models);
       }
       
-      // 从 providers 中获取 Base URL
-      if (data.providers?.[data.chat_provider]) {
-        const p = data.providers[data.chat_provider];
+      // 从 providers 中获取 Base URL 和名称
+      if (data.providers?.[provider]) {
+        const p = data.providers[provider];
         setChatBaseUrl(p.base_url || '');
+      } else {
+        // 对预设提供商使用默认 base URL
+        const template = PROVIDER_TEMPLATES.find(t => t.id === provider);
+        if (template) {
+          setChatBaseUrl(template.baseUrl);
+          setChatProviderName(template.name);
+        } else if (provider !== 'custom') {
+          // 是注册过的自定义提供商，但没在 providers 中找到
+          setChatBaseUrl('');
+          setChatProviderName(provider);
+        }
       }
       
     } catch (error) {
@@ -110,41 +149,96 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     const template = PROVIDER_TEMPLATES.find(p => p.id === providerId);
     
     setChatProvider(providerId);
+    
     if (template) {
-      setChatProviderName(template.name);
+      // 预设提供商：使用预设的 name 和 baseUrl
+      if (providerId !== 'custom') {
+        setChatProviderName(template.name);
+      } else {
+        // 自定义：保留之前填写的名称
+        setChatProviderName(allApiKeys[providerId] ? providerId : '');
+      }
       setChatBaseUrl(template.baseUrl);
+      
       // 优先使用保存的模型，否则使用预设的第一个模型
       const savedModel = providerModels[providerId];
       if (savedModel) {
         setChatModel(savedModel);
       } else if (template.models.length > 0) {
         setChatModel(template.models[0]);
+      } else {
+        setChatModel('');
       }
+    } else {
+      // 不在模板中的已有提供商（如之前手动添加的）
+      setChatProviderName(providerId);
+      setChatBaseUrl('');
+      const savedModel = providerModels[providerId];
+      setChatModel(savedModel || '');
     }
+    
     // 从已保存的 API Keys 中加载该提供商的 Key
     setChatApiKey(allApiKeys[providerId] || '');
   };
 
   const handleSave = async () => {
     try {
+      // 确定实际的 provider ID
+      // 对于自定义提供商，使用用户输入的名称作为 ID
+      let actualProvider = chatProvider;
+      if (chatProvider === 'custom') {
+        if (!chatProviderName.trim()) {
+          alert('请输入提供商名称');
+          return;
+        }
+        actualProvider = chatProviderName.trim().toLowerCase().replace(/\s+/g, '-');
+      }
+      
       // 合并所有 API Keys，保留之前保存的其他提供商的 Key
       const mergedApiKeys = {
         ...allApiKeys,
-        [chatProvider]: chatApiKey,
+        [actualProvider]: chatApiKey,
       };
       
       // 更新当前提供商的模型
       const updatedProviderModels = {
         ...providerModels,
-        [chatProvider]: chatModel,
+        [actualProvider]: chatModel,
       };
       
+      // 构建 providers 配置更新（用于注册新的或自定义的提供商）
+      const providersUpdate: Record<string, any> = {};
+      
+      // 对所有非预设提供商，注册其配置
+      const presetIds = PROVIDER_TEMPLATES.filter(t => t.id !== 'custom').map(t => t.id);
+      if (!presetIds.includes(actualProvider)) {
+        const modelList = chatModel ? [chatModel] : [];
+        providersUpdate[actualProvider] = {
+          base_url: chatBaseUrl,
+          api_key_env: `${actualProvider.toUpperCase().replace(/-/g, '_')}_API_KEY`,
+          models: modelList,
+        };
+      }
+      
+      // 对预设提供商，传递 model_capabilities
+      const template = PROVIDER_TEMPLATES.find(t => t.id === actualProvider);
+      if (template?.modelCapabilities) {
+        providersUpdate[actualProvider] = {
+          ...(providersUpdate[actualProvider] || {
+            base_url: template.baseUrl,
+            api_key_env: `${actualProvider.toUpperCase().replace(/-/g, '_')}_API_KEY`,
+            models: template.models,
+          }),
+          model_capabilities: template.modelCapabilities,
+        };
+      }
+      
       await setConfig({
-        chat_provider: chatProvider,
+        chat_provider: actualProvider,
         chat_model: chatModel,
         temperature: chatTemperature,
         provider_api_keys: mergedApiKeys,
-        custom_models: {},
+        custom_models: providersUpdate as any,
         provider_models: updatedProviderModels,
       });
       
@@ -152,7 +246,12 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       setAllApiKeys(mergedApiKeys);
       setProviderModels(updatedProviderModels);
       
-      alert('配置已保存');
+      // 如果切换了 provider ID（自定义场景），同步更新状态
+      if (actualProvider !== chatProvider) {
+        setChatProvider(actualProvider);
+      }
+      
+      alert('配置已保存，请刷新页面后开始对话');
     } catch (error) {
       console.error('Failed to save config:', error);
       alert('保存失败');
@@ -237,6 +336,12 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                       {PROVIDER_TEMPLATES.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
+                      {dynamicProviders.length > 0 && (
+                        <option disabled>──── 已配置的提供商 ────</option>
+                      )}
+                      {dynamicProviders.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -306,6 +411,21 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                         ))}
                       </div>
                     ) : null}
+                    {/* 显示当前选中模型的能力 */}
+                    {(() => {
+                      const template = PROVIDER_TEMPLATES.find(p => p.id === chatProvider);
+                      const caps = template?.modelCapabilities?.[chatModel] || [];
+                      if (caps.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {caps.map((cap: string) => (
+                            <span key={cap} className="px-2 py-0.5 text-[10px] rounded-md bg-green-50 text-green-700 border border-green-200">
+                              {CAPABILITY_LABELS[cap] || cap}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div>

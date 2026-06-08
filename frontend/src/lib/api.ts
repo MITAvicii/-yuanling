@@ -26,11 +26,18 @@ export async function fetchAPI<T>(
 }
 
 // Chat API
+export interface ChatFile {
+  name: string;
+  data: string;  // base64 encoded (without data: prefix) or full data URL
+  mime_type: string;
+}
+
 export async function sendMessage(
   message: string,
   sessionId?: string,
   onChunk?: (chunk: any) => void,
-  ragEnabled?: boolean
+  ragEnabled?: boolean,
+  files?: ChatFile[]
 ): Promise<void> {
   const url = `${API_BASE}/api/chat`;
   
@@ -42,6 +49,7 @@ export async function sendMessage(
       session_id: sessionId,
       stream: true,
       rag_enabled: ragEnabled,
+      files: files && files.length > 0 ? files : undefined,
     }),
   });
   
@@ -125,7 +133,7 @@ export interface ConfigResponse {
   chat_model: string;
   temperature: number;
   rag_enabled: boolean;
-  providers: Record<string, { base_url: string; models: string[] }>;
+  providers: Record<string, { base_url: string; models: string[]; model_capabilities?: Record<string, string[]> }>;
   provider_api_keys?: Record<string, string>;
   provider_models?: Record<string, string>;
 }

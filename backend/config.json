@@ -1,6 +1,6 @@
 {
-  "chat_provider": "deepseek",
-  "chat_model": "deepseek-chat",
+  "chat_provider": "agnes-ai",
+  "chat_model": "agnes-2.0-flash",
   "temperature": 0.7,
   "max_tokens": 4096,
   "embedding_model": "bge-base-zh-v1.5",
@@ -39,12 +39,43 @@
         "gpt-4o-mini",
         "gpt-4-turbo"
       ]
+    },
+    "agnes-ai": {
+      "base_url": "https://apihub.agnes-ai.com/v1",
+      "api_key_env": "AGNES_AI_API_KEY",
+      "models": [
+        "agnes-2.0-flash",
+        "agnes-1.5-flash",
+        "agnes-image-2.0-flash",
+        "agnes-image-2.1-flash",
+        "agnes-video-v2.0"
+      ],
+      "model_capabilities": {
+        "agnes-2.0-flash": [
+          "chat",
+          "vision"
+        ],
+        "agnes-1.5-flash": [
+          "chat",
+          "vision"
+        ],
+        "agnes-image-2.0-flash": [
+          "image_gen"
+        ],
+        "agnes-image-2.1-flash": [
+          "image_gen"
+        ],
+        "agnes-video-v2.0": [
+          "video_gen"
+        ]
+      }
     }
   },
   "custom_models": {},
   "provider_models": {
     "nvidia": "z-ai/glm5",
-    "deepseek": "deepseek-chat"
+    "deepseek": "deepseek-chat",
+    "agnes-ai": "agnes-2.0-flash"
   },
   "platform_apps": {
     "feishu": {
@@ -91,6 +122,9 @@
     "max_iterations": 15,
     "recursion_limit": 100,
     "request_timeout": 180,
-    "tool_result_max_length": 500
+    "tool_result_max_length": 500,
+    "max_history_messages": 20,
+    "compress_threshold": 15,
+    "summary_enabled": true
   }
 }

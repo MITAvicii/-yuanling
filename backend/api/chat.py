@@ -49,12 +49,20 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 # ============= 数据模型 =============
 
+class ChatFile(BaseModel):
+    """上传的文件"""
+    name: str  # 文件名
+    data: str  # base64 编码的文件数据
+    mime_type: str  # MIME 类型，如 image/jpeg, video/mp4
+
+
 class ChatRequest(BaseModel):
     """对话请求"""
     message: str
     session_id: Optional[str] = None
     stream: bool = True
     rag_enabled: Optional[bool] = None  # 是否启用 RAG（null 时使用全局配置）
+    files: Optional[list[ChatFile]] = None  # 上传的文件（图片/视频）
 
 
 class ChatResponse(BaseModel):
@@ -69,6 +77,49 @@ class ChatResponse(BaseModel):
 def format_sse(data: dict) -> str:
     """格式化 SSE 数据"""
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _build_message_content(message: str, files: Optional[list] = None):
+    """
+    构建多模态消息内容
+    
+    如果提供了文件，构建 OpenAI vision 格式的 content 数组；
+    否则返回纯文本字符串。
+    """
+    if not files:
+        return message
+    
+    # 构建多模态 content
+    content_parts = [{"type": "text", "text": message}]
+    
+    for file in files:
+        if hasattr(file, 'mime_type'):
+            mime = file.mime_type
+            data = file.data
+        elif isinstance(file, dict):
+            mime = file.get('mime_type', '')
+            data = file.get('data', '')
+        else:
+            continue
+        
+        # 检查是否是已有的 data URL（含协议前缀）
+        if data.startswith('data:'):
+            data_url = data
+        else:
+            data_url = f"data:{mime};base64,{data}"
+        
+        if mime.startswith('image/'):
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": data_url}
+            })
+        elif mime.startswith('video/'):
+            content_parts.append({
+                "type": "video_url",
+                "video_url": {"url": data_url}
+            })
+    
+    return content_parts
 
 
 def _perform_rag_retrieval(message: str, config) -> Optional[dict]:
@@ -276,6 +327,7 @@ async def chat(request: ChatRequest):
             is_first_msg=is_first,
             first_message_text=request.message if is_first else None,
             use_rag=use_rag,
+            files=request.files,
         ),
         media_type="text/event-stream",
         headers={
@@ -294,6 +346,7 @@ async def stream_chat(
     is_first_msg: bool = False,
     first_message_text: Optional[str] = None,
     use_rag: bool = False,
+    files: Optional[list] = None,
 ):
     """
     流式对话生成器（token 级别流式输出）
@@ -328,8 +381,10 @@ async def stream_chat(
                 "above_threshold": rag_results.get("above_threshold", False) if rag_results else False,
             })
         
-        # 3. 准备消息（包含 RAG 上下文）
-        messages_to_save = [HumanMessage(content=user_message)]
+        # 3. 准备消息（包含文件和多模态内容）
+        # 构建 multimodal content
+        message_content = _build_message_content(user_message, files)
+        messages_to_save = [HumanMessage(content=message_content)]
         
         # 如果有 RAG 结果，追加到历史
         effective_history = list(history)
@@ -347,7 +402,8 @@ async def stream_chat(
         async for event_type, data in run_agent_astream(
             session_id, 
             user_message, 
-            effective_history
+            effective_history,
+            files=files
         ):
             if event_type == "token":
                 current_content += data

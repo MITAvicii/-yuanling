@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Sparkles, Wrench, Database, CheckCircle, Image, BarChart3, Cog, FileSearch, Terminal } from 'lucide-react';
-import { Session, sendMessage, getSession } from '@/lib/api';
+import { Send, Loader2, Sparkles, Wrench, Database, CheckCircle, Image, BarChart3, Cog, FileSearch, Terminal, Paperclip, X, Film } from 'lucide-react';
+import { Session, sendMessage, getSession, ChatFile, getConfig } from '@/lib/api';
 
 // 工具名称映射到图标
 const toolIcons: Record<string, React.ReactNode> = {
@@ -48,6 +48,7 @@ interface Message {
   role: 'user' | 'assistant';
   type?: 'human' | 'ai' | 'tool';
   content: string;
+  files?: ChatFile[];
   toolCalls?: ToolCall[];
   retrieval?: RetrievalInfo;
   isNew?: boolean;
@@ -167,15 +168,62 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
   const [runningStatus, setRunningStatus] = useState<RunningStatus>({ phase: 'idle' });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 跟踪当前显示消息所属的会话ID，用于防止流式过程中被历史加载覆盖
+  const displaySessionIdRef = useRef<string | null>(null);
+  
+  // 文件上传相关
+  const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
+  const [supportsUpload, setSupportsUpload] = useState(false);
+  const [currentModelCaps, setCurrentModelCaps] = useState<string[]>([]);
 
-  // 加载会话历史消息
+  // 加载会话历史消息（仅在切换会话时加载，流式过程中不加载）
   useEffect(() => {
     if (session?.id) {
+      // 如果当前已显示的消息就属于该会话，跳过加载（避免覆盖流式消息）
+      if (displaySessionIdRef.current === session.id) return;
+      displaySessionIdRef.current = session.id;
       loadSessionHistory(session.id);
     } else {
+      displaySessionIdRef.current = null;
       setMessages([]);
     }
   }, [session?.id]);
+
+  // 加载模型能力（判断是否支持文件上传）
+  useEffect(() => {
+    loadModelCapabilities();
+  }, []);
+
+  const loadModelCapabilities = async () => {
+    try {
+      const data = await getConfig();
+      const provider = data.providers?.[data.chat_provider];
+      if (provider) {
+        const caps = provider.model_capabilities?.[data.chat_model] || [];
+        setCurrentModelCaps(caps);
+        // 非纯文本模型（有 vision/image_gen/video_gen 能力）支持上传
+        const canUpload = caps.some((c: string) => c !== 'chat');
+        setSupportsUpload(canUpload);
+      }
+    } catch (error) {
+      console.error('Failed to load model capabilities:', error);
+    }
+  };
+
+  // 从可能的多模态 content 中提取纯文本
+  // 后端多模态消息的 content 是 [{type:"text",text:"..."}, {type:"image_url",...}] 格式
+  const extractText = (content: any): string => {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter((block: any) => block?.type === 'text')
+        .map((block: any) => block?.text || '')
+        .join('\n');
+    }
+    return String(content || '');
+  };
 
   const loadSessionHistory = async (sessionId: string) => {
     setLoadingHistory(true);
@@ -199,18 +247,18 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
             });
             lastAiContent = '';
           }
-          // 添加用户消息
+          // 添加用户消息（从多模态 content 中提取文本）
           historyMessages.push({
             id: `${sessionId}-${historyMessages.length}`,
             role: 'user',
             type: 'human',
-            content: msg.content || '',
+            content: extractText(msg.content),
           });
         } else if (msg.type === 'ai') {
           // AI 消息：保留内容，如果最后有 tool_calls 则等待 tool response
           if (!msg.tool_calls || msg.tool_calls.length === 0) {
             // 没有 tool_calls，这是最终回复
-            lastAiContent = msg.content || '';
+            lastAiContent = extractText(msg.content);
           }
           // 如果有 tool_calls，先等待后续的 tool response
         } else if (msg.type === 'tool') {
@@ -240,17 +288,75 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 处理文件选择
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const newFiles: Promise<ChatFile>[] = Array.from(files).map((file) => {
+      return new Promise<ChatFile>((resolve, reject) => {
+        // 文件大小限制：图片 10MB，视频 50MB
+        const isVideo = file.type.startsWith('video/');
+        const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+          reject(new Error(`文件 ${file.name} 超过大小限制（${isVideo ? '50MB' : '10MB'}）`));
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1]; // 去掉 data:xxx;base64, 前缀
+          resolve({
+            name: file.name,
+            data: base64,
+            mime_type: file.type,
+          });
+        };
+        reader.onerror = () => reject(new Error(`读取文件 ${file.name} 失败`));
+        reader.readAsDataURL(file);
+      });
+    });
+    
+    Promise.all(newFiles)
+      .then((results) => {
+        setAttachedFiles((prev) => [...prev, ...results]);
+      })
+      .catch((err) => {
+        alert(err.message);
+      });
+    
+    // 重置 input 以允许重新选择同一文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  // 移除已附加的文件
+  const removeFile = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+  
+  // 触发文件选择
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || loading) return;
+    if ((!input.trim() && attachedFiles.length === 0) || loading) return;
+
+    // 保留当前文件引用
+    const filesToSend = attachedFiles.length > 0 ? [...attachedFiles] : undefined;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: input.trim(),
+      files: filesToSend,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setAttachedFiles([]);
     setLoading(true);
 
     const aiMessageId = (Date.now() + 1).toString();
@@ -265,6 +371,8 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
         session?.id,
         (chunk: any) => {
           if (chunk.type === 'session') {
+            // 标记当前显示的消息已属于该会话，防止 useEffect 覆盖
+            displaySessionIdRef.current = chunk.session_id;
             onSessionUpdate({ ...session, id: chunk.session_id } as Session);
           } else if (chunk.type === 'retrieval') {
             setMessages((prev) =>
@@ -363,7 +471,8 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
             setLoading(false);
           }
         },
-        ragEnabled
+        ragEnabled,
+        filesToSend
       );
     } catch (error) {
       setMessages((prev) =>
@@ -431,7 +540,26 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
               >
                 {message.role === 'user' ? (
                   <div className="message-user">
-                    {message.content}
+                    {message.content && <p>{message.content}</p>}
+                    {message.files && message.files.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {message.files.map((file, i) => (
+                          file.mime_type.startsWith('image/') ? (
+                            <img
+                              key={i}
+                              src={`data:${file.mime_type};base64,${file.data}`}
+                              alt={file.name}
+                              className="max-w-[200px] max-h-[200px] rounded-lg object-cover border border-gray-200"
+                            />
+                          ) : file.mime_type.startsWith('video/') ? (
+                            <div key={i} className="w-40 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-900 flex items-center justify-center relative">
+                              <Film size={24} className="text-gray-400" />
+                              <span className="absolute bottom-1 left-1 right-1 text-[10px] text-gray-400 truncate text-center">{file.name}</span>
+                            </div>
+                          ) : null
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full max-w-[85%]">
@@ -593,14 +721,72 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
       {/* 输入区域 */}
       <div className="p-4 bg-white border-t border-gray-100">
         <div className="max-w-3xl mx-auto">
+          {/* 文件预览区 */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {attachedFiles.map((file, index) => (
+                <div key={index} className="relative group">
+                  {file.mime_type.startsWith('image/') ? (
+                    <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                      <img
+                        src={`data:${file.mime_type};base64,${file.data}`}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : file.mime_type.startsWith('video/') ? (
+                    <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-900 flex items-center justify-center">
+                      <Film size={24} className="text-gray-400" />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center">
+                      <Paperclip size={24} className="text-gray-400" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={12} />
+                  </button>
+                  <span className="absolute bottom-0 left-0 right-0 text-[9px] text-center truncate bg-black/40 text-white rounded-b-lg px-1">
+                    {file.name.length > 10 ? file.name.slice(0, 8) + '..' : file.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          
           <div className="flex gap-3 items-end">
+            {/* 文件上传按钮（仅多模态模型显示） */}
+            {supportsUpload && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={triggerFileUpload}
+                  disabled={loading}
+                  className="h-12 w-12 flex items-center justify-center bg-gray-100 text-gray-500 rounded-xl hover:bg-gray-200 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  title="上传图片或视频"
+                >
+                  <Paperclip size={20} />
+                </button>
+              </>
+            )}
+            
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="输入消息..."
+                placeholder={supportsUpload ? "输入消息，可上传图片/视频..." : "输入消息..."}
                 className="input resize-none pr-12"
                 rows={1}
                 disabled={loading}
@@ -609,7 +795,7 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
             </div>
             <button
               onClick={handleSend}
-              disabled={!input.trim() || loading}
+              disabled={(!input.trim() && attachedFiles.length === 0) || loading}
               className="h-12 px-5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium flex items-center gap-2"
             >
               {loading ? (
@@ -620,7 +806,7 @@ export function ChatArea({ session, onSessionUpdate, ragEnabled = true }: ChatAr
             </button>
           </div>
           <div className="text-xs text-gray-400 mt-2 text-center">
-            按 Enter 发送，Shift + Enter 换行
+            按 Enter 发送，Shift + Enter 换行{currentModelCaps.includes('vision') && ' | 支持图片/视频输入'}
           </div>
         </div>
       </div>

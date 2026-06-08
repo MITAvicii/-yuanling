@@ -6,7 +6,7 @@ from typing import Optional, Dict, List, Any
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 
-from backend.config import get_config, BACKEND_DIR
+from backend.config import get_config, BACKEND_DIR, ProviderConfig
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -25,8 +25,9 @@ class SetConfigRequest(BaseModel):
     temperature: Optional[float] = None
     embedding_model: Optional[str] = None
     provider_api_keys: Optional[Dict[str, str]] = None
-    custom_models: Optional[Dict[str, List[str]]] = None
+    custom_models: Optional[Dict[str, Any]] = None  # 支持 provider 注册 {id: {base_url, api_key_env, models}}
     provider_models: Optional[Dict[str, str]] = None  # 每个提供商最后使用的模型
+    custom_providers: Optional[Dict[str, Dict[str, Any]]] = None  # 完整的提供商配置
 
 
 # ========== Config API ==========
@@ -38,7 +39,7 @@ async def get_full_config():
     
     # 获取所有 API Keys（脱敏）
     provider_api_keys = {}
-    for provider_id in ["deepseek", "dashscope", "openai", "nvidia", "ollama"]:
+    for provider_id in ["deepseek", "dashscope", "openai", "nvidia", "ollama", "agnes-ai"]:
         key = config.get_api_key(provider_id)
         if key:
             provider_api_keys[provider_id] = key
@@ -78,6 +79,31 @@ async def set_full_config(request: SetConfigRequest):
     if request.embedding_model is not None:
         config.config.embedding_model = request.embedding_model
     
+    # 注册自定义提供商（从 custom_models 或 custom_providers 字段）
+    provider_configs = request.custom_providers or request.custom_models
+    if provider_configs:
+        # 检查是否是完整提供商配置（包含 base_url）
+        for provider_id, provider_data in provider_configs.items():
+            if isinstance(provider_data, dict) and 'base_url' in provider_data:
+                # 完整的提供商配置
+                if config.config.providers is None:
+                    config.config.providers = {}
+                models = provider_data.get('models', [])
+                if isinstance(models, str):
+                    models = [m.strip() for m in models.split(',') if m.strip()]
+                elif models is None:
+                    models = []
+                provider_entry = ProviderConfig(
+                    base_url=provider_data.get('base_url', ''),
+                    api_key_env=provider_data.get('api_key_env', f'{provider_id.upper()}_API_KEY'),
+                    models=models if isinstance(models, list) else [models] if models else [],
+                    model_capabilities=provider_data.get('model_capabilities', {}),
+                )
+                config.config.providers[provider_id] = provider_entry
+            elif isinstance(provider_data, list):
+                # 仅模型列表（兼容旧格式）
+                config.config.custom_models[provider_id] = provider_data
+    
     # 保存每个提供商最后使用的模型
     if request.provider_models:
         if not hasattr(config.config, 'provider_models') or config.config.provider_models is None:
@@ -107,7 +133,9 @@ def _save_api_keys(api_keys: Dict[str, str]):
         if not api_key:
             continue
             
-        key_name = f"{provider_id.upper()}_API_KEY"
+        # 将连字符替换为下划线（env 变量名不支持连字符）
+        safe_name = provider_id.upper().replace('-', '_')
+        key_name = f"{safe_name}_API_KEY"
         found = False
         
         for i, line in enumerate(lines):
@@ -152,11 +180,12 @@ async def get_providers():
     config = get_config()
     
     providers = [
-        {"id": "deepseek", "name": "DeepSeek", "base_url": "https://api.deepseek.com", "models": ["deepseek-chat", "deepseek-reasoner"]},
-        {"id": "openai", "name": "OpenAI", "base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-4-turbo"]},
-        {"id": "dashscope", "name": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "models": ["qwen-turbo", "qwen-plus"]},
-        {"id": "nvidia", "name": "NVIDIA", "base_url": "https://integrate.api.nvidia.com/v1", "models": ["meta/llama-3.1-8b-instruct"]},
-        {"id": "ollama", "name": "Ollama (本地)", "base_url": "http://localhost:11434/v1", "models": ["llama3.1", "qwen2.5"]},
+        {"id": "deepseek", "name": "DeepSeek", "base_url": "https://api.deepseek.com", "models": ["deepseek-chat", "deepseek-reasoner"], "model_capabilities": {}},
+        {"id": "openai", "name": "OpenAI", "base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-4-turbo"], "model_capabilities": {"gpt-4o": ["chat", "vision"], "gpt-4-turbo": ["chat", "vision"]}},
+        {"id": "dashscope", "name": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "models": ["qwen-turbo", "qwen-plus"], "model_capabilities": {}},
+        {"id": "nvidia", "name": "NVIDIA", "base_url": "https://integrate.api.nvidia.com/v1", "models": ["meta/llama-3.1-8b-instruct"], "model_capabilities": {}},
+        {"id": "agnes-ai", "name": "Agnes AI (全模态)", "base_url": "https://apihub.agnes-ai.com/v1", "models": ["agnes-2.0-flash", "agnes-1.5-flash", "agnes-image-2.0-flash", "agnes-image-2.1-flash", "agnes-video-v2.0"], "model_capabilities": {"agnes-2.0-flash": ["chat", "vision"], "agnes-1.5-flash": ["chat", "vision"], "agnes-image-2.0-flash": ["image_gen"], "agnes-image-2.1-flash": ["image_gen"], "agnes-video-v2.0": ["video_gen"]}},
+        {"id": "ollama", "name": "Ollama (本地)", "base_url": "http://localhost:11434/v1", "models": ["llama3.1", "qwen2.5"], "model_capabilities": {}},
     ]
     
     # 添加自定义提供商
@@ -166,6 +195,7 @@ async def get_providers():
             "name": provider_id,
             "base_url": provider_config.base_url,
             "models": provider_config.models or [],
+            "model_capabilities": getattr(provider_config, 'model_capabilities', {}),
             "is_custom": True,
         })
     

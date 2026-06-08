@@ -70,6 +70,11 @@
 <location>./backend/skills/ml-data-expert/SKILL.md</location>
 </skill>
 <skill>
+<name>git-pusher</name>
+<description>- HTTPS 连接不稳定时建议使用 SSH</description>
+<location>./backend/skills/git-pusher/SKILL.md</location>
+</skill>
+<skill>
 <name>code-archaeologist</name>
 <description>MUST BE USED to explore and document unfamiliar, legacy, or complex codebases. Use PROACTIVELY before refactors, onboarding, audits, or risk reviews. Produces a full-length report—architecture, metric</description>
 <location>./backend/skills/code-archaeologist/SKILL.md</location>

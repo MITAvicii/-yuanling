@@ -180,7 +180,7 @@ def build_system_prompt(force_rebuild: bool = False) -> str:
     return _system_prompt_cache
 
 
-def _prepare_agent_state(session_id: str, user_message: str, messages: list = None) -> dict:
+def _prepare_agent_state(session_id: str, user_message: str, messages: list = None, files: list = None) -> dict:
     """准备 Agent 状态（公共方法）"""
     system_prompt = build_system_prompt()
     
@@ -189,7 +189,13 @@ def _prepare_agent_state(session_id: str, user_message: str, messages: list = No
     else:
         msg_list = list(messages)
     
-    msg_list = msg_list + [HumanMessage(content=user_message)]
+    # 构建用户消息内容（支持多模态）
+    if files:
+        content = _build_multimodal_content(user_message, files)
+    else:
+        content = user_message
+    
+    msg_list = msg_list + [HumanMessage(content=content)]
     
     return {
         "messages": msg_list,
@@ -197,6 +203,39 @@ def _prepare_agent_state(session_id: str, user_message: str, messages: list = No
         "system_prompt": system_prompt,
         "iteration_count": 0,
     }
+
+
+def _build_multimodal_content(message: str, files: list) -> list:
+    """构建多模态消息内容（OpenAI vision 格式）"""
+    content_parts = [{"type": "text", "text": message}]
+    
+    for file in files:
+        if hasattr(file, 'mime_type'):
+            mime = file.mime_type
+            data = file.data
+        elif isinstance(file, dict):
+            mime = file.get('mime_type', '')
+            data = file.get('data', '')
+        else:
+            continue
+        
+        if data.startswith('data:'):
+            data_url = data
+        else:
+            data_url = f"data:{mime};base64,{data}"
+        
+        if mime.startswith('image/'):
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": data_url}
+            })
+        elif mime.startswith('video/'):
+            content_parts.append({
+                "type": "video_url",
+                "video_url": {"url": data_url}
+            })
+    
+    return content_parts
 
 
 def create_agent_graph():
@@ -298,7 +337,7 @@ def run_agent(session_id: str, user_message: str, messages: list = None):
         return asyncio.run(run_agent_async(session_id, user_message, messages))
 
 
-async def run_agent_astream(session_id: str, user_message: str, messages: list = None):
+async def run_agent_astream(session_id: str, user_message: str, messages: list = None, files: list = None):
     """
     流式运行 Agent（token 级别流式输出）
     
@@ -306,6 +345,7 @@ async def run_agent_astream(session_id: str, user_message: str, messages: list =
         session_id: 会话 ID
         user_message: 用户消息
         messages: 历史消息列表
+        files: 上传的文件列表（支持图片和视频）
         
     Yields:
         (event_type, data) 元组
@@ -316,7 +356,7 @@ async def run_agent_astream(session_id: str, user_message: str, messages: list =
     graph = create_agent_graph()
     agent_config = _get_agent_config()
     
-    state = _prepare_agent_state(session_id, user_message, messages)
+    state = _prepare_agent_state(session_id, user_message, messages, files)
     config = {"recursion_limit": agent_config.recursion_limit}
     tool_result_max_length = agent_config.tool_result_max_length
     
