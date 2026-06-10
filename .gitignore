@@ -11,7 +11,7 @@
 .env.local
 .env.example
 backend/.env*
-ask-search/searxng/.env*
+mcp/ask-search/searxng/.env*
 frontend/.env*
 
 # Python
